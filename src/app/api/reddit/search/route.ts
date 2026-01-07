@@ -1,44 +1,41 @@
 import { NextResponse } from 'next/server'
-import { searchSubreddit, searchPainPoints } from '@/lib/reddit/client'
+import {
+  searchPainPoints,
+  searchSubreddit,
+  DEFAULT_SUBREDDITS,
+  PAIN_POINT_KEYWORDS,
+} from '@/lib/reddit-client'
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q')
     const subreddit = searchParams.get('subreddit')
-    const painPoints = searchParams.get('pain_points') === 'true'
-    const limit = parseInt(searchParams.get('limit') || '25')
+    const mode = searchParams.get('mode') || 'painpoints' // 'painpoints' | 'search'
 
-    if (painPoints) {
-      // Search for pain points across default subreddits
-      const subreddits = subreddit
-        ? [subreddit]
-        : ['SaaS', 'startups', 'Entrepreneur', 'indiehackers']
-
-      const results = await searchPainPoints(subreddits, { limit })
-      return NextResponse.json({ data: results })
+    if (mode === 'search' && query) {
+      // Single subreddit search
+      const targetSubreddit = subreddit || 'SaaS'
+      const results = await searchSubreddit(targetSubreddit, query, 25)
+      return NextResponse.json({ data: results, count: results.length })
     }
 
-    if (!query) {
-      return NextResponse.json(
-        { error: 'Query parameter "q" is required' },
-        { status: 400 }
-      )
-    }
+    // Default: search for pain points across multiple subreddits
+    const subreddits = subreddit ? [subreddit] : DEFAULT_SUBREDDITS
+    const keywords = PAIN_POINT_KEYWORDS
 
-    if (!subreddit) {
-      return NextResponse.json(
-        { error: 'Subreddit parameter is required' },
-        { status: 400 }
-      )
-    }
+    const results = await searchPainPoints(subreddits, keywords, 5)
 
-    const results = await searchSubreddit(subreddit, query, { limit })
-    return NextResponse.json({ data: results })
+    return NextResponse.json({
+      data: results,
+      count: results.length,
+      subreddits,
+      keywords,
+    })
   } catch (error) {
     console.error('Reddit search error:', error)
     return NextResponse.json(
-      { error: 'Failed to search Reddit' },
+      { error: error instanceof Error ? error.message : 'Failed to search Reddit' },
       { status: 500 }
     )
   }

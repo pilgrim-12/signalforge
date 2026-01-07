@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { searchPainPoints } from '@/lib/reddit/client'
-import { extractKeywords, TARGET_SUBREDDITS } from '@/lib/utils/patterns'
+import { searchPainPoints, DEFAULT_SUBREDDITS } from '@/lib/reddit-client'
+import { extractKeywords } from '@/lib/utils/patterns'
 
 // This endpoint is meant to be called by a cron job (e.g., Vercel Cron)
 // It scans Reddit for new pain points and saves them to the database
@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   try {
     // Verify cron secret (for security)
     const authHeader = request.headers.get('authorization')
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (authHeader !== "Bearer " + process.env.CRON_SECRET) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -20,21 +20,21 @@ export async function GET(request: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Search for pain points
-    const results = await searchPainPoints(TARGET_SUBREDDITS, { limit: 10 })
+    // Search for pain points using public Reddit JSON API
+    const results = await searchPainPoints(DEFAULT_SUBREDDITS)
 
     // Process and save results
-    const ideasToInsert = results.map((post) => ({
+    const ideasToInsert = results.map((idea) => ({
       source: 'reddit' as const,
-      source_id: post.id,
-      subreddit: post.subreddit,
-      title: post.title,
-      body: post.selftext || null,
-      url: post.permalink,
-      score: post.score,
-      comments_count: post.num_comments,
-      keywords: extractKeywords(`${post.title} ${post.selftext || ''}`),
-      source_created_at: new Date(post.created_utc * 1000).toISOString(),
+      source_id: idea.id,
+      subreddit: idea.subreddit,
+      title: idea.title,
+      body: idea.body || null,
+      url: idea.url,
+      score: idea.score,
+      comments_count: idea.numComments,
+      keywords: extractKeywords(idea.title + ' ' + (idea.body || '')),
+      source_created_at: idea.createdAt.toISOString(),
     }))
 
     // Upsert ideas (update if exists, insert if new)
@@ -53,7 +53,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Scanned ${results.length} posts, saved ${data?.length || 0} ideas`,
+      message: 'Scanned ' + results.length + ' posts, saved ' + (data?.length || 0) + ' ideas',
       timestamp: new Date().toISOString(),
     })
   } catch (error) {

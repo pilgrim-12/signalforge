@@ -9,7 +9,12 @@
       "Bash(cat:*)",
       "Bash(taskkill:*)",
       "Bash(powershell:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nInitial SignalForge project setup\n\n- Next.js 14 with TypeScript and Tailwind CSS\n- Firebase Authentication with Google Sign-In\n- Supabase database integration\n- Dashboard with sidebar navigation\n- Pain Points, Communities, Trends, Alerts pages\n- Landing page with modern design\n- shadcn/ui components\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(npx vercel:*)",
+      "Bash(git push:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

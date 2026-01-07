@@ -1,6 +1,7 @@
 'use client'
 
-import { Bell, Search } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Bell, Search, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -11,8 +12,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useAuthStore } from '@/stores/authStore'
 
 export function Header() {
+  const { user, logout } = useAuthStore()
+  const router = useRouter()
+
+  const handleLogout = async () => {
+    await logout()
+    router.push('/login')
+  }
+
+  const userInitial = user?.displayName?.[0] || user?.email?.[0]?.toUpperCase() || 'U'
+  const userEmail = user?.email || ''
+
   return (
     <header className="flex h-16 items-center justify-between border-b border-border bg-card px-6">
       {/* Search */}
@@ -42,7 +55,7 @@ export function Header() {
               <div className="flex flex-col gap-1">
                 <span className="text-sm font-medium">New pain point detected</span>
                 <span className="text-xs text-muted-foreground">
-                  "I wish there was a tool for..." in r/SaaS
+                  &quot;I wish there was a tool for...&quot; in r/SaaS
                 </span>
               </div>
             </DropdownMenuItem>
@@ -50,7 +63,7 @@ export function Header() {
               <div className="flex flex-col gap-1">
                 <span className="text-sm font-medium">Trend alert</span>
                 <span className="text-xs text-muted-foreground">
-                  "AI automation" is trending +45% this week
+                  &quot;AI automation&quot; is trending +45% this week
                 </span>
               </div>
             </DropdownMenuItem>
@@ -61,19 +74,35 @@ export function Header() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                U
-              </div>
+              {user?.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || 'User'}
+                  className="h-8 w-8 rounded-full"
+                />
+              ) : (
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                  {userInitial}
+                </div>
+              )}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuLabel>
+              <div className="flex flex-col">
+                <span>{user?.displayName || 'User'}</span>
+                <span className="text-xs font-normal text-muted-foreground">{userEmail}</span>
+              </div>
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem>Profile</DropdownMenuItem>
             <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuItem>Billing</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Sign out</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout} className="text-destructive">
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
