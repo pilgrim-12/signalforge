@@ -37,7 +37,7 @@ interface RedditListingResponse {
 // Default subreddits for pain point discovery
 export const DEFAULT_SUBREDDITS = [
   'SaaS',
-  'startups',
+  'startups', 
   'Entrepreneur',
   'SideProject',
   'indiehackers',
@@ -50,58 +50,29 @@ export const PAIN_POINT_KEYWORDS = [
   'frustrated with',
   'looking for a tool',
   'need an app',
-  'why isn\'t there',
+  'why isnt there',
 ]
-
-// Rate limiting state
-let lastRequestTime = 0
-const MIN_REQUEST_INTERVAL = 6000 // 10 requests per minute = 6 seconds between requests
-let consecutiveErrors = 0
 
 const USER_AGENT = 'SignalForge/1.0 (market research tool)'
 
-async function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-async function rateLimitedFetch(url: string): Promise<Response> {
-  const now = Date.now()
-  const timeSinceLastRequest = now - lastRequestTime
-
-  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-    await sleep(MIN_REQUEST_INTERVAL - timeSinceLastRequest)
-  }
-
-  lastRequestTime = Date.now()
-
+async function redditFetch(url: string): Promise<Response> {
   const response = await fetch(url, {
     headers: {
       'User-Agent': USER_AGENT,
     },
   })
 
-  // Handle rate limiting with exponential backoff
-  if (response.status === 429) {
-    consecutiveErrors++
-    const backoffTime = Math.min(60000, 1000 * Math.pow(2, consecutiveErrors))
-    console.warn(`Rate limited by Reddit. Waiting ${backoffTime}ms before retry...`)
-    await sleep(backoffTime)
-    return rateLimitedFetch(url)
-  }
-
-  // Reset error counter on success
-  if (response.ok) {
-    consecutiveErrors = 0
+  if (!response.ok) {
+    throw new Error('Reddit API error: ' + response.status + ' ' + response.statusText)
   }
 
   return response
 }
 
 function extractKeywords(title: string, body: string): string[] {
-  const text = `${title} ${body}`.toLowerCase()
+  const text = (title + ' ' + body).toLowerCase()
   const keywords: string[] = []
 
-  // Extract common tech/business keywords
   const techKeywords = [
     'api', 'saas', 'app', 'tool', 'software', 'platform', 'dashboard',
     'automation', 'ai', 'ml', 'analytics', 'integration', 'workflow',
@@ -117,7 +88,6 @@ function extractKeywords(title: string, body: string): string[] {
     }
   }
 
-  // Limit to top 5 keywords
   return keywords.slice(0, 5)
 }
 
@@ -127,7 +97,7 @@ export function parseRedditPost(data: RedditPostData): Idea {
     title: data.title,
     body: data.selftext || '',
     subreddit: data.subreddit,
-    url: `https://reddit.com${data.permalink}`,
+    url: 'https://reddit.com' + data.permalink,
     score: data.score,
     numComments: data.num_comments,
     createdAt: new Date(data.created_utc * 1000),
@@ -136,20 +106,10 @@ export function parseRedditPost(data: RedditPostData): Idea {
 }
 
 export async function getNewPosts(subreddit: string, limit: number = 25): Promise<Idea[]> {
-  try {
-    const url = `https://www.reddit.com/r/${subreddit}/new.json?limit=${limit}`
-    const response = await rateLimitedFetch(url)
-
-    if (!response.ok) {
-      throw new Error(`Reddit API error: ${response.status} ${response.statusText}`)
-    }
-
-    const json: RedditListingResponse = await response.json()
-    return json.data.children.map(child => parseRedditPost(child.data))
-  } catch (error) {
-    console.error(`Error fetching new posts from r/${subreddit}:`, error)
-    throw error
-  }
+  const url = 'https://www.reddit.com/r/' + subreddit + '/new.json?limit=' + limit
+  const response = await redditFetch(url)
+  const json: RedditListingResponse = await response.json()
+  return json.data.children.map(child => parseRedditPost(child.data))
 }
 
 export async function searchSubreddit(
@@ -157,23 +117,33 @@ export async function searchSubreddit(
   query: string,
   limit: number = 25
 ): Promise<Idea[]> {
-  try {
-    const encodedQuery = encodeURIComponent(query)
-    const url = `https://www.reddit.com/r/${subreddit}/search.json?q=${encodedQuery}&restrict_sr=1&sort=new&limit=${limit}`
-    const response = await rateLimitedFetch(url)
-
-    if (!response.ok) {
-      throw new Error(`Reddit API error: ${response.status} ${response.statusText}`)
-    }
-
-    const json: RedditListingResponse = await response.json()
-    return json.data.children.map(child => parseRedditPost(child.data))
-  } catch (error) {
-    console.error(`Error searching r/${subreddit} for "${query}":`, error)
-    throw error
-  }
+  const encodedQuery = encodeURIComponent(query)
+  const url = 'https://www.reddit.com/r/' + subreddit + '/search.json?q=' + encodedQuery + '&restrict_sr=1&sort=new&limit=' + limit
+  const response = await redditFetch(url)
+  const json: RedditListingResponse = await response.json()
+  return json.data.children.map(child => parseRedditPost(child.data))
 }
 
+// Quick search - single request, fast response for Vercel
+export async function quickPainPointSearch(limit: number = 50): Promise<Idea[]> {
+  // Search across all subreddits at once using Reddit's global search
+  const query = 'I wish there was OR looking for a tool OR need an app OR frustrated with'
+  const encodedQuery = encodeURIComponent(query)
+  const subreddits = DEFAULT_SUBREDDITS.join('+')
+  const url = 'https://www.reddit.com/r/' + subreddits + '/search.json?q=' + encodedQuery + '&sort=new&limit=' + limit + '&restrict_sr=1'
+  
+  const response = await redditFetch(url)
+  const json: RedditListingResponse = await response.json()
+  
+  const ideas = json.data.children.map(child => parseRedditPost(child.data))
+  
+  // Sort by score
+  ideas.sort((a, b) => b.score - a.score)
+  
+  return ideas
+}
+
+// Full search - multiple requests (for cron jobs, not real-time)
 export async function searchPainPoints(
   subreddits: string[] = DEFAULT_SUBREDDITS,
   keywords: string[] = PAIN_POINT_KEYWORDS,
@@ -186,8 +156,6 @@ export async function searchPainPoints(
     for (const keyword of keywords) {
       try {
         const results = await searchSubreddit(subreddit, keyword, limitPerSearch)
-
-        // Deduplicate by post ID
         for (const idea of results) {
           if (!seenIds.has(idea.id)) {
             seenIds.add(idea.id)
@@ -195,19 +163,11 @@ export async function searchPainPoints(
           }
         }
       } catch (error) {
-        // Log error but continue with other searches
-        console.error(`Failed to search r/${subreddit} for "${keyword}":`, error)
+        console.error('Failed to search r/' + subreddit + ' for "' + keyword + '":', error)
       }
     }
   }
 
-  // Sort by score (engagement) descending
   allResults.sort((a, b) => b.score - a.score)
-
   return allResults
-}
-
-// Quick search for a single subreddit (useful for testing)
-export async function quickSearch(subreddit: string, query: string): Promise<Idea[]> {
-  return searchSubreddit(subreddit, query, 10)
 }
