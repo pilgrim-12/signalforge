@@ -41,12 +41,11 @@ export default function IdeasPage() {
     setLoading(true)
     setError(null)
     try {
-      const query = encodeURIComponent('I wish there was OR looking for a tool OR need an app')
-      const subreddits = DEFAULT_SUBREDDITS.join('+')
-      const url = 'https://www.reddit.com/r/' + subreddits + '/search.json?q=' + query + '&sort=new&limit=50&restrict_sr=1'
-      const response = await fetch(url)
-      if (!response.ok) throw new Error('Reddit API error: ' + response.status)
+      // Use our server-side API proxy to avoid CORS issues
+      const response = await fetch('/api/reddit')
+      if (!response.ok) throw new Error('API error: ' + response.status)
       const json = await response.json()
+      if (json.error) throw new Error(json.error)
       const fetchedIdeas: Idea[] = json.data.children.map((child: RedditPost) => ({
         id: child.data.id,
         title: child.data.title,
