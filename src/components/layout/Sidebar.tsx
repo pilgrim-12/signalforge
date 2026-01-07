@@ -1,21 +1,22 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   Lightbulb,
   Users,
   TrendingUp,
   Bell,
-  Home,
+  LayoutDashboard,
   Settings,
   LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { useAuthStore } from '@/stores/authStore'
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: Home },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Ideas', href: '/ideas', icon: Lightbulb },
   { name: 'Communities', href: '/communities', icon: Users },
   { name: 'Trends', href: '/trends', icon: TrendingUp },
@@ -24,6 +25,13 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const { logout } = useAuthStore()
+
+  const handleLogout = async () => {
+    await logout()
+    router.push('/login')
+  }
 
   return (
     <aside className="flex h-screen w-64 flex-col border-r border-border bg-card">
@@ -38,7 +46,7 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 space-y-1 p-4">
         {navigation.map((item) => {
-          const isActive = pathname === item.href
+          const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
             <Link
               key={item.name}
@@ -69,6 +77,7 @@ export function Sidebar() {
           </Link>
           <Button
             variant="ghost"
+            onClick={handleLogout}
             className="w-full justify-start gap-3 px-3 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           >
             <LogOut className="h-5 w-5" />
