@@ -62,11 +62,15 @@ export async function GET(request: Request) {
 }
 
 // POST - sync ideas from external APIs to database
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const supabase = await createClient()
     const savedCount = { reddit: 0, hackernews: 0 }
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'
+    const errors: string[] = []
+
+    // Get base URL from request
+    const url = new URL(request.url)
+    const baseUrl = `${url.protocol}//${url.host}`
 
     // Fetch from HackerNews API
     try {
@@ -92,12 +96,16 @@ export async function POST() {
               .from('ideas')
               .upsert(idea as never, { onConflict: 'source,source_id' })
 
-            if (!error) savedCount.hackernews++
+            if (error) {
+              errors.push(`HN upsert error: ${error.message}`)
+            } else {
+              savedCount.hackernews++
+            }
           }
         }
       }
     } catch (e) {
-      console.error('HN fetch error:', e)
+      errors.push(`HN fetch error: ${e}`)
     }
 
     // Fetch from Reddit API (skip mock data)
@@ -125,12 +133,16 @@ export async function POST() {
               .from('ideas')
               .upsert(idea as never, { onConflict: 'source,source_id' })
 
-            if (!error) savedCount.reddit++
+            if (error) {
+              errors.push(`Reddit upsert error: ${error.message}`)
+            } else {
+              savedCount.reddit++
+            }
           }
         }
       }
     } catch (e) {
-      console.error('Reddit fetch error:', e)
+      errors.push(`Reddit fetch error: ${e}`)
     }
 
     // Update trend snapshots
@@ -139,6 +151,7 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       saved: savedCount,
+      errors: errors.length > 0 ? errors.slice(0, 5) : undefined,
       message: `Synced ${savedCount.hackernews} from HackerNews, ${savedCount.reddit} from Reddit`
     })
   } catch (error) {
