@@ -76,35 +76,41 @@ export interface Database {
       communities: {
         Row: {
           id: string
-          platform: 'reddit' | 'discord' | 'slack'
+          platform: 'reddit' | 'discord' | 'slack' | 'hackernews'
           name: string
           url: string
+          description: string | null
           subscribers: number
           allows_promotion: boolean
           tags: string[]
           rules: string | null
+          is_active: boolean
           created_at: string
         }
         Insert: {
           id?: string
-          platform: 'reddit' | 'discord' | 'slack'
+          platform: 'reddit' | 'discord' | 'slack' | 'hackernews'
           name: string
           url: string
+          description?: string | null
           subscribers?: number
           allows_promotion?: boolean
           tags?: string[]
           rules?: string | null
+          is_active?: boolean
           created_at?: string
         }
         Update: {
           id?: string
-          platform?: 'reddit' | 'discord' | 'slack'
+          platform?: 'reddit' | 'discord' | 'slack' | 'hackernews'
           name?: string
           url?: string
+          description?: string | null
           subscribers?: number
           allows_promotion?: boolean
           tags?: string[]
           rules?: string | null
+          is_active?: boolean
           created_at?: string
         }
       }
@@ -112,25 +118,31 @@ export interface Database {
         Row: {
           id: string
           user_id: string
+          name: string
           keywords: string[]
           subreddits: string[]
           is_active: boolean
+          last_triggered_at: string | null
           created_at: string
         }
         Insert: {
           id?: string
           user_id: string
+          name?: string
           keywords: string[]
           subreddits?: string[]
           is_active?: boolean
+          last_triggered_at?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           user_id?: string
+          name?: string
           keywords?: string[]
           subreddits?: string[]
           is_active?: boolean
+          last_triggered_at?: string | null
           created_at?: string
         }
       }

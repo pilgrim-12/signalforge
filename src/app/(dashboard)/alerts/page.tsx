@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,49 +15,106 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Bell, Plus, Trash2, Pause, Play } from 'lucide-react'
+import { Bell, Plus, Trash2, Pause, Play, Loader2, RefreshCw } from 'lucide-react'
 
-// Mock data
-const mockAlerts = [
-  {
-    id: '1',
-    keywords: ['SaaS', 'metrics', 'dashboard'],
-    subreddits: ['SaaS', 'startups'],
-    isActive: true,
-    createdAt: '2024-01-10T10:00:00Z',
-    matchCount: 45,
-  },
-  {
-    id: '2',
-    keywords: ['AI', 'automation', 'workflow'],
-    subreddits: ['Entrepreneur', 'smallbusiness'],
-    isActive: true,
-    createdAt: '2024-01-12T15:30:00Z',
-    matchCount: 32,
-  },
-  {
-    id: '3',
-    keywords: ['no-code', 'low-code'],
-    subreddits: ['NoCode', 'webdev'],
-    isActive: false,
-    createdAt: '2024-01-08T09:00:00Z',
-    matchCount: 18,
-  },
-]
+interface Alert {
+  id: string
+  name: string
+  keywords: string[]
+  subreddits: string[]
+  is_active: boolean
+  created_at: string
+  match_count: number
+}
 
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState(mockAlerts)
+  const [alerts, setAlerts] = useState<Alert[]>([])
+  const [loading, setLoading] = useState(true)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [newKeywords, setNewKeywords] = useState('')
+  const [newSubreddits, setNewSubreddits] = useState('')
+  const [newName, setNewName] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  const toggleAlert = (id: string) => {
-    setAlerts(alerts.map(alert =>
-      alert.id === id ? { ...alert, isActive: !alert.isActive } : alert
-    ))
+  const fetchAlerts = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/alerts')
+      if (res.ok) {
+        const data = await res.json()
+        setAlerts(data.data || [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch alerts:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const deleteAlert = (id: string) => {
-    setAlerts(alerts.filter(alert => alert.id !== id))
+  useEffect(() => {
+    fetchAlerts()
+  }, [])
+
+  const toggleAlert = async (id: string, currentStatus: boolean) => {
+    try {
+      const res = await fetch('/api/alerts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, is_active: !currentStatus }),
+      })
+      if (res.ok) {
+        setAlerts(alerts.map(alert =>
+          alert.id === id ? { ...alert, is_active: !currentStatus } : alert
+        ))
+      }
+    } catch (error) {
+      console.error('Failed to toggle alert:', error)
+    }
   }
+
+  const deleteAlert = async (id: string) => {
+    try {
+      const res = await fetch(`/api/alerts?id=${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setAlerts(alerts.filter(alert => alert.id !== id))
+      }
+    } catch (error) {
+      console.error('Failed to delete alert:', error)
+    }
+  }
+
+  const createAlert = async () => {
+    if (!newKeywords.trim()) return
+
+    setSaving(true)
+    try {
+      const res = await fetch('/api/alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newName.trim() || 'New Alert',
+          keywords: newKeywords.split(',').map(k => k.trim()).filter(Boolean),
+          subreddits: newSubreddits.split(',').map(s => s.trim()).filter(Boolean),
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setAlerts([{ ...data.data, match_count: 0 }, ...alerts])
+        setIsCreateOpen(false)
+        setNewKeywords('')
+        setNewSubreddits('')
+        setNewName('')
+      }
+    } catch (error) {
+      console.error('Failed to create alert:', error)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const activeCount = alerts.filter(a => a.is_active).length
+  const totalKeywords = alerts.reduce((acc, a) => acc + (a.keywords?.length || 0), 0)
+  const totalMatches = alerts.reduce((acc, a) => acc + (a.match_count || 0), 0)
 
   return (
     <div className="space-y-6">
@@ -68,46 +125,66 @@ export default function AlertsPage() {
             Get notified when new posts match your keywords
           </p>
         </div>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New Alert
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create New Alert</DialogTitle>
-              <DialogDescription>
-                Set up keyword monitoring for specific subreddits
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="keywords">Keywords (comma separated)</Label>
-                <Input
-                  id="keywords"
-                  placeholder="SaaS, metrics, dashboard"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="subreddits">Subreddits (comma separated)</Label>
-                <Input
-                  id="subreddits"
-                  placeholder="SaaS, startups, Entrepreneur"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-                Cancel
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={fetchAlerts} disabled={loading}>
+            <RefreshCw className={loading ? 'mr-2 h-4 w-4 animate-spin' : 'mr-2 h-4 w-4'} />
+            Refresh
+          </Button>
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                New Alert
               </Button>
-              <Button onClick={() => setIsCreateOpen(false)}>
-                Create Alert
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create New Alert</DialogTitle>
+                <DialogDescription>
+                  Set up keyword monitoring for pain points
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Alert Name</Label>
+                  <Input
+                    id="name"
+                    placeholder="My Alert"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="keywords">Keywords (comma separated)</Label>
+                  <Input
+                    id="keywords"
+                    placeholder="SaaS, metrics, dashboard"
+                    value={newKeywords}
+                    onChange={(e) => setNewKeywords(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="subreddits">Sources (comma separated, optional)</Label>
+                  <Input
+                    id="subreddits"
+                    placeholder="SaaS, startups, HackerNews"
+                    value={newSubreddits}
+                    onChange={(e) => setNewSubreddits(e.target.value)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={createAlert} disabled={saving || !newKeywords.trim()}>
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Create Alert
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Stats */}
@@ -120,18 +197,20 @@ export default function AlertsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {alerts.filter(a => a.isActive).length}
+              {loading ? '...' : activeCount}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Matches Today
+              Total Matches
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">24</div>
+            <div className="text-2xl font-bold">
+              {loading ? '...' : totalMatches}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -142,77 +221,104 @@ export default function AlertsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {alerts.reduce((acc, a) => acc + a.keywords.length, 0)}
+              {loading ? '...' : totalKeywords}
             </div>
           </CardContent>
         </Card>
       </div>
 
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && alerts.length === 0 && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Bell className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-muted-foreground mb-4">
+              No alerts yet. Create your first alert to start monitoring keywords.
+            </p>
+            <Button onClick={() => setIsCreateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Alert
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Alerts List */}
-      <div className="space-y-4">
-        {alerts.map((alert) => (
-          <Card key={alert.id}>
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Bell className={`h-5 w-5 ${alert.isActive ? 'text-primary' : 'text-muted-foreground'}`} />
-                    Alert #{alert.id}
-                    <Badge variant={alert.isActive ? 'default' : 'secondary'}>
-                      {alert.isActive ? 'Active' : 'Paused'}
-                    </Badge>
-                  </CardTitle>
-                  <CardDescription>
-                    Created {new Date(alert.createdAt).toLocaleDateString()} • {alert.matchCount} matches
-                  </CardDescription>
+      {!loading && alerts.length > 0 && (
+        <div className="space-y-4">
+          {alerts.map((alert) => (
+            <Card key={alert.id}>
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Bell className={`h-5 w-5 ${alert.is_active ? 'text-primary' : 'text-muted-foreground'}`} />
+                      {alert.name || `Alert #${alert.id.slice(0, 8)}`}
+                      <Badge variant={alert.is_active ? 'default' : 'secondary'}>
+                        {alert.is_active ? 'Active' : 'Paused'}
+                      </Badge>
+                    </CardTitle>
+                    <CardDescription>
+                      Created {new Date(alert.created_at).toLocaleDateString()} • {alert.match_count || 0} matches
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => toggleAlert(alert.id, alert.is_active)}
+                    >
+                      {alert.is_active ? (
+                        <Pause className="h-4 w-4" />
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteAlert(alert.id)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => toggleAlert(alert.id)}
-                  >
-                    {alert.isActive ? (
-                      <Pause className="h-4 w-4" />
-                    ) : (
-                      <Play className="h-4 w-4" />
-                    )}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => deleteAlert(alert.id)}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Keywords</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(alert.keywords || []).map((keyword) => (
+                      <Badge key={keyword} variant="outline">
+                        {keyword}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Keywords</p>
-                <div className="flex flex-wrap gap-2">
-                  {alert.keywords.map((keyword) => (
-                    <Badge key={keyword} variant="outline">
-                      {keyword}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Subreddits</p>
-                <div className="flex flex-wrap gap-2">
-                  {alert.subreddits.map((subreddit) => (
-                    <Badge key={subreddit} variant="secondary">
-                      r/{subreddit}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                {alert.subreddits && alert.subreddits.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-2">Sources</p>
+                    <div className="flex flex-wrap gap-2">
+                      {alert.subreddits.map((subreddit) => (
+                        <Badge key={subreddit} variant="secondary">
+                          {subreddit}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
