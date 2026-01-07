@@ -78,5 +78,5 @@ export async function GET() {
 
   // Fallback to mock data if OAuth not configured or failed
   console.log('Using mock data (Reddit OAuth not configured or failed)');
-  return NextResponse.json(MOCK_DATA);
+  return NextResponse.json({ ...MOCK_DATA, source: 'mock' });
 }
