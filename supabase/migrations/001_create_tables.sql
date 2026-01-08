@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS ideas (
   score INTEGER DEFAULT 0,
   comments_count INTEGER DEFAULT 0,
   keywords TEXT[] DEFAULT '{}',
+  pain_score INTEGER DEFAULT 0, -- 0-20 score indicating likelihood of being a real pain point
   created_at TIMESTAMPTZ DEFAULT NOW(),
   source_created_at TIMESTAMPTZ NOT NULL,
   UNIQUE(source, source_id)
@@ -72,6 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_ideas_source ON ideas(source);
 CREATE INDEX IF NOT EXISTS idx_ideas_created_at ON ideas(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ideas_source_created ON ideas(source_created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ideas_keywords ON ideas USING GIN(keywords);
+CREATE INDEX IF NOT EXISTS idx_ideas_pain_score ON ideas(pain_score DESC);
 CREATE INDEX IF NOT EXISTS idx_communities_platform ON communities(platform);
 CREATE INDEX IF NOT EXISTS idx_alerts_user_id ON alerts(user_id);
 CREATE INDEX IF NOT EXISTS idx_trend_snapshots_date ON trend_snapshots(snapshot_date DESC);
